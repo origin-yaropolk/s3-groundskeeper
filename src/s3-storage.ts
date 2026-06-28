@@ -1,34 +1,9 @@
 import * as stream from 'stream';
 import * as S3 from '@aws-sdk/client-s3';
-import { getArgv } from './config.js';
+import { getS3DestConfig, S3ConnectionConfig } from './config.js';
 import { Storage, StorageOp,  StorageObject, ObjectMeta } from './storage-api';
 
-
-interface S3Config {
-	accessKey: string;
-	secretAccessKey: string;
-	region: string;
-	endpoint: string | undefined;
-	bucket: string;
-}
-
-let s3Config: S3Config | undefined;
-
-function getS3Config(): S3Config {
-	if (!s3Config) {
-		const argv = getArgv();
-
-		s3Config = {
-			accessKey: argv['s3-key'],
-			secretAccessKey: argv['s3-seckey'],
-			region: argv['s3-region'],
-			endpoint: argv['s3-endpoint'],
-			bucket: argv['s3-bucket']
-		};
-	}
-
-	return s3Config;
-}
+export type S3Config = S3ConnectionConfig;
 
 class S3Object implements StorageObject {
 	private readonly client: S3.S3Client;
@@ -50,57 +25,82 @@ class S3Object implements StorageObject {
 		const mt = await this.client.send(new S3.HeadObjectCommand({Bucket: this.bucket, Key: this.key}));
 
 		// see: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
-		const md5 = this.obj.ETag ? this.obj.ETag.replace(/"/g, '') : undefined;
+		const etag = mt.ETag ?? this.obj.ETag;
+		const md5 = etag ? etag.replace(/"/g, '') : undefined;
 
 		return {
 			key: this.key,
-			size: this.obj.Size ?? 0,
+			size: mt.ContentLength ?? this.obj.Size ?? 0,
 			md5,
+			contentType: mt.ContentType,
 			redirectPath: mt.WebsiteRedirectLocation,
 			custom: mt.Metadata
 		};
 	}
 
-	open(): Promise<stream.Readable> {
-		throw new Error('S3Object.open does not implemented');
+	get description(): string {
+		return `s3://${this.bucket}/${this.key}`;
+	}
+
+	async open(): Promise<stream.Readable> {
+		const response = await this.client.send(new S3.GetObjectCommand({
+			Bucket: this.bucket,
+			Key: this.key
+		}));
+
+		if (!response.Body) {
+			throw new Error(`S3 object body is empty: s3://${this.bucket}/${this.key}`);
+		}
+
+		return response.Body as stream.Readable;
 	}
 }
 
 export class S3Storage implements Storage {
 
 	private readonly client: S3.S3Client;
+	private readonly config: S3Config;
 
-	constructor() {
-		const conf = getS3Config();
+	constructor(config?: S3Config) {
+		this.config = config ?? getS3DestConfig();
 		const clientConfig: S3.S3ClientConfig = {
-			region: conf.region,
+			region: this.config.region,
 			credentials: {
-				accessKeyId: conf.accessKey,
-				secretAccessKey: conf.secretAccessKey
+				accessKeyId: this.config.accessKey,
+				secretAccessKey: this.config.secretAccessKey
 			},
-			endpoint: conf.endpoint,
-			forcePathStyle: conf.endpoint !== undefined,
+			endpoint: this.config.endpoint,
+			forcePathStyle: this.config.endpoint !== undefined,
 		};
 
 		this.client = new S3.S3Client(clientConfig);
 	}
 
 	get bucket(): string {
-		return getS3Config().bucket;
+		return this.config.bucket;
 	}
 
 	async list(): Promise<StorageObject[]> {
 		const bucket = this.bucket;
-		const data: S3.ListObjectsCommandOutput = await this.client.send(new S3.ListObjectsCommand({Bucket: bucket}));
-		if (!data.Contents || data.Contents.length === 0) {
-			return [];
-		}
+		const objects: StorageObject[] = [];
+		let continuationToken: string | undefined;
 
-		const objects = data.Contents
-			.filter(obj => (typeof obj.Key === 'string') && obj.Key.length > 0)
-			.map((obj: S3._Object) => {
-				return new S3Object(this.client, bucket, obj);
-			});
+		do {
+			const data: S3.ListObjectsV2CommandOutput = await this.client.send(new S3.ListObjectsV2Command({
+				Bucket: bucket,
+				ContinuationToken: continuationToken
+			}));
+
+			if (data.Contents) {
+				for (const obj of data.Contents) {
+					if (typeof obj.Key === 'string' && obj.Key.length > 0) {
+						objects.push(new S3Object(this.client, bucket, obj));
+					}
+				}
+			}
+
+			continuationToken = data.IsTruncated ? data.NextContinuationToken : undefined;
+		} while (continuationToken);
 
 		return objects;
 	}

@@ -1,6 +1,6 @@
 # S3 Grounds Keeper
 
-One way synchronization local directory content with Amazon S3 bucket.
+One way synchronization of local directory or S3 bucket content with an Amazon S3 bucket.
 
 
 
@@ -18,18 +18,27 @@ start develop: `yarn build`
 
 |--arg                          |-short    | required | description              |
 |-------------------------------|----------|----------|--------------------------|
-|--src=path                     | -s=path  |*         | path to source (sync out) directory |
+|--src=path                     | -s=path  |*¹        | path to source (sync out) directory |
 |--s3-region=name               |          |*         | S3 Bucket's region       |
 |--s3-endpoint=url              |          |          | S3 Endpoint URL          |
 |--s3-key=key                   |          |*         | S3 Access Key            |
 |--s3-seckey=key                |          |*         | S3 Secret Access Key            |
 |--s3-bucket=name               | -b=name  |*         | S3 destination (sync in) bucket name (**NOT ARN**, just a name)   |
-|--artifactory-url=url          |          |*         | jfrog Artifactory base url |
-|--artifactory-user=username    |          |*         | jfrog Artifactory user |
+|--s3-src-bucket=name           |          |*²        | S3 source bucket name (enables S3→S3 sync) |
+|--s3-src-region=name           |          |          | S3 source region (defaults to `--s3-region`) |
+|--s3-src-endpoint=url          |          |          | S3 source endpoint (defaults to `--s3-endpoint`) |
+|--s3-src-key=key               |          |          | S3 source access key (defaults to `--s3-key`) |
+|--s3-src-seckey=key            |          |          | S3 source secret key (defaults to `--s3-seckey`) |
+|--artifactory-url=url          |          |          | jfrog Artifactory base url (required for metapointer files) |
+|--artifactory-user=username    |          |          | jfrog Artifactory user |
 |--artifactory-password=password|          |          | jfrog Artifactory user's password |
 |--artifactory-apikey=jfapikey  |          |          | jfrog Artifactory user's Api key |
 |--dry-run                      | -n       |          | Dry run: do nothing only prints what to do. |
 |--show-conf                    |          |          | Print json object for the used configuration. |
+
+¹ `--src` is required for local→S3 sync (default mode). Omit when using `--s3-src-bucket`.
+
+² `--s3-src-bucket` enables S3→S3 sync; `--src` is not used in this mode.
 
 ### jFrog notes
 
@@ -42,6 +51,18 @@ There is required parameters to configure access to S3 resources:
 * region;
 * access key / secret access key;
 * target bucket's name;
+
+#### S3→S3 sync
+
+When `--s3-src-bucket` is set, the source is read from that bucket instead of a local directory.
+Destination credentials (`--s3-key`, `--s3-seckey`, `--s3-region`, `--s3-endpoint`) apply to both sides unless overridden with `--s3-src-*` flags.
+
+Example (same account, different buckets):
+
+```
+s3gk --s3-src-bucket=my-source-bucket --s3-bucket=my-dest-bucket \
+  --s3-region=eu-west-1 --s3-key=... --s3-seckey=...
+```
 
 
 ## Metapointer file format.
