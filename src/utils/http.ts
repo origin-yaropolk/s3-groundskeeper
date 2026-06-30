@@ -86,6 +86,10 @@ export function get(url: URL, requestData?: RequestData): Promise<IncomingMessag
 	return requestStream(url, 'GET', requestData);
 }
 
+export function head(url: URL, requestData?: RequestData): Promise<IncomingMessage> {
+	return requestStream(url, 'HEAD', requestData);
+}
+
 export function post(url: URL, requestData?: RequestData): Promise<Buffer> {
 	return request(url, 'POST', requestData);
 }

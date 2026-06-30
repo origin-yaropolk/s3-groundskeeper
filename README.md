@@ -24,10 +24,14 @@ start develop: `yarn build`
 |--s3-key=key                   |          |*         | S3 Access Key            |
 |--s3-seckey=key                |          |*         | S3 Secret Access Key            |
 |--s3-bucket=name               | -b=name  |*         | S3 destination (sync in) bucket name (**NOT ARN**, just a name)   |
-|--artifactory-url=url          |          |*         | jfrog Artifactory base url |
-|--artifactory-user=username    |          |*         | jfrog Artifactory user |
+|--artifactory-url=url          |          |          | jfrog Artifactory base url |
+|--artifactory-user=username    |          |          | jfrog Artifactory user |
 |--artifactory-password=password|          |          | jfrog Artifactory user's password |
 |--artifactory-apikey=jfapikey  |          |          | jfrog Artifactory user's Api key |
+|--gitlab-url=url               |          |          | GitLab base url |
+|--gitlab-token=token           |          |          | GitLab private token |
+|--gitlab-project-id=id         |          |          | GitLab project id |
+|--gitlab-artifact-path=path    |          |          | Default job artifact path when metapointer omits oid path |
 |--dry-run                      | -n       |          | Dry run: do nothing only prints what to do. |
 |--show-conf                    |          |          | Print json object for the used configuration. |
 
@@ -54,6 +58,7 @@ Providers:
 |Provider   |Data                                      | Sample                                 |
 |-----------|------------------------------------------|----------------------------------------|
 |jfrogart   | **oid** aql_request_field:field_value    |oid md5:e26a6019c8da5d9a3e6f742c0c6cc02c|
+|gitlab     | **oid** job or generic + optional md5    |oid job:5876                           |
 
 Sample for jfrogart
 
@@ -64,6 +69,32 @@ or
 
 > **#metapointer** *jfrogart*
 > **oid** *name:myfilename.txt*
+
+Sample for gitlab (job artifact):
+
+> **#metapointer** *gitlab*
+> **oid** *md5:6c0031479237272d51613e5d64558909*
+> **oid** *job:5876*
+> **oid** *path:out/Package.msix*
+
+Alternatively, omit `oid path:` and pass `--gitlab-artifact-path=out/Package.msix` to s3gk.
+
+Sample for gitlab (generic package):
+
+> **#metapointer** *gitlab*
+> **oid** *md5:6c0031479237272d51613e5d64558909*
+> **oid** *generic:my-package/0.3.0/92/Package.msix*
+
+### GitLab CLI options
+
+|--arg                          | required | description |
+|-------------------------------|----------|-------------|
+|--gitlab-url=url               | for gitlab metapointers | GitLab base URL |
+|--gitlab-token=token           | for gitlab metapointers | GitLab private token |
+|--gitlab-project-id=id         | for gitlab metapointers | GitLab project id |
+|--gitlab-artifact-path=path    | no | Default artifact path for `oid job:` |
+
+`oid md5:` is used for S3 sync metadata (like jfrog `actual_md5`). GitLab does not resolve files by md5 alone — pair it with `oid job:` or `oid generic:`.
 
 ## Publish a new release
 1. Make an annotated git tag using `git tag -a <version>` or `git tag -s <version>`, if signed tag is preferred.

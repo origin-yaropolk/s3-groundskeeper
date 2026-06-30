@@ -2,8 +2,11 @@ import * as fs from 'fs';
 
 export interface MetaPointer {
 	readonly source: string;
-	oid: {kind: string; value: string};
+	readonly oid: { kind: string; value: string };
+	readonly oids: Readonly<Record<string, string>>;
 }
+
+const OID_LINE_RE = /^oid ([A-Za-z0-9_]+):([A-Za-z0-9._/:-]+)$/;
 
 export async function readMetaPointerFromFile(filePath: string, existingStats?: fs.Stats): Promise<MetaPointer | undefined> {
 	const tag = '#metapointer';
@@ -13,7 +16,7 @@ export async function readMetaPointerFromFile(filePath: string, existingStats?: 
 		return ;
 	}
 
-	const handle = await fs.promises.open(filePath, 'r')
+	const handle = await fs.promises.open(filePath, 'r');
 
 	try {
 		const readString = (len: number): Promise<string> => {
@@ -47,19 +50,33 @@ export async function readMetaPointerFromFile(filePath: string, existingStats?: 
 			throw new Error(`Invalid #metapointer, source must be specified: ${filePath}`);
 		}
 
-		const oidRe = /^oid ([A-Za-z0-9_]+):([A-Za-z0-9\._-]+)$/;
+		const oids: Record<string, string> = {};
+		let primaryOid: { kind: string; value: string } | undefined;
 
 		for (const line of lines) {
-			const match = oidRe.exec(line);
-			// tslint:disable-next-line: no-magic-numbers
-			if (match && match.length === 3) {
-				return {
-					source,
-					// tslint:disable-next-line: no-magic-numbers
-					oid: {kind: match[1], value: match[2]}
-				};
+			const match = OID_LINE_RE.exec(line);
+			if (!match) {
+				continue;
+			}
+
+			const kind = match[1];
+			const value = match[2];
+			oids[kind] = value;
+
+			if (!primaryOid) {
+				primaryOid = { kind, value };
 			}
 		}
+
+		if (!primaryOid) {
+			throw new Error(`Invalid #metapointer, oid must be specified: ${filePath}`);
+		}
+
+		return {
+			source,
+			oid: primaryOid,
+			oids,
+		};
 	}
 	finally {
 		await handle.close();

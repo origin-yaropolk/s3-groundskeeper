@@ -5,7 +5,18 @@ import * as crypto from 'crypto';
 import { ReadonlyStorage, StorageObject, ObjectMeta } from './storage-api.js';
 import { findMetaForPath, getArgv } from './config.js';
 
-import { ArtifactoryClient, ArtifactoryConfig, ArtifactoryItemMeta, createArtifactoryClient, MetaPointer, readMetaPointerFromFile } from './index.js';
+import {
+	ArtifactoryClient,
+	ArtifactoryConfig,
+	ArtifactoryItemMeta,
+	createArtifactoryClient,
+	createGitLabClient,
+	GitLabClient,
+	GitLabClientConfig,
+	GitLabResolvedItem,
+	MetaPointer,
+	readMetaPointerFromFile,
+} from './index.js';
 
 
 function computeFileMd5(fullPath: string): Promise<string> {
@@ -86,7 +97,7 @@ class FsObject extends FsObjectBase implements StorageObject {
 	}
 }
 
-class MetaPointerFsObject extends FsObjectBase implements StorageObject {
+class JfrogMetaPointerFsObject extends FsObjectBase implements StorageObject {
 	private readonly metaptr: MetaPointer;
 	private readonly artItem: Promise<ArtifactoryItemMeta | null>;
 	private readonly artifactoryClient: ArtifactoryClient;
@@ -105,7 +116,7 @@ class MetaPointerFsObject extends FsObjectBase implements StorageObject {
 
 		const argv = getArgv();
 		if (argv['artifactory-url'].length === 0) {
-			throw new Error('artifactory-url can not be empty.');
+			throw new Error('artifactory-url can not be empty for jfrogart metapointers.');
 		}
 		const artConfig: ArtifactoryConfig = {
 			baseUrl: new URL(argv['artifactory-url']),
@@ -168,6 +179,74 @@ class MetaPointerFsObject extends FsObjectBase implements StorageObject {
 	}
 }
 
+class GitlabMetaPointerFsObject extends FsObjectBase implements StorageObject {
+	private readonly metaptr: MetaPointer;
+	private readonly gitlabClient: GitLabClient;
+	private readonly resolvedItem: Promise<GitLabResolvedItem>;
+
+	constructor(rootPath: string, relPath: string, metaptr: MetaPointer) {
+		super(rootPath, relPath);
+		this.metaptr = metaptr;
+		this.gitlabClient = createGitLabClient(getGitLabConfig());
+		this.resolvedItem = this.gitlabClient.resolveFromOids(metaptr.oids);
+	}
+
+	get description(): string {
+		const jobId = this.metaptr.oids.job;
+		const generic = this.metaptr.oids.generic;
+		const target = jobId ? `job ${jobId}` : generic ? `generic ${generic}` : this.metaptr.oid.value;
+		return `gitlab ${target}, (${this.contentType})`;
+	}
+
+	async meta(): Promise<ObjectMeta> {
+		const item = await this.resolvedItem;
+
+		return {
+			key: this.key,
+			size: item.size ?? 0,
+			md5: item.expectedMd5,
+			contentType: this.contentType,
+		};
+	}
+
+	async open(): Promise<stream.Readable> {
+		const item = await this.resolvedItem;
+		return this.gitlabClient.getContentStream(item);
+	}
+}
+
+function getGitLabConfig(): GitLabClientConfig {
+	const argv = getArgv();
+
+	if (argv['gitlab-url'].length === 0) {
+		throw new Error('gitlab-url can not be empty for gitlab metapointers.');
+	}
+	if (argv['gitlab-token'].length === 0) {
+		throw new Error('gitlab-token can not be empty for gitlab metapointers.');
+	}
+	if (argv['gitlab-project-id'].length === 0) {
+		throw new Error('gitlab-project-id can not be empty for gitlab metapointers.');
+	}
+
+	return {
+		baseUrl: new URL(argv['gitlab-url']),
+		token: argv['gitlab-token'],
+		projectId: argv['gitlab-project-id'],
+		defaultArtifactPath: argv['gitlab-artifact-path'],
+	};
+}
+
+function createMetaPointerObject(rootPath: string, relPath: string, metaptr: MetaPointer): StorageObject {
+	switch (metaptr.source) {
+		case 'jfrogart':
+			return new JfrogMetaPointerFsObject(rootPath, relPath, metaptr);
+		case 'gitlab':
+			return new GitlabMetaPointerFsObject(rootPath, relPath, metaptr);
+		default:
+			throw new Error(`Unknown metapointer source: ${metaptr.source}`);
+	}
+}
+
 export class FsStorage implements ReadonlyStorage {
 
 	private readonly rootPath: string;
@@ -201,7 +280,9 @@ export class FsStorage implements ReadonlyStorage {
 				}
 				else if (stats.isSymbolicLink() || stats.isFile()) {
 					const metaptr = stats.isSymbolicLink() ? undefined : await readMetaPointerFromFile(fullPath, stats);
-					const obj = metaptr ? new MetaPointerFsObject(this.rootPath, key, metaptr) : new FsObject(this.rootPath, key, stats);
+					const obj = metaptr
+						? createMetaPointerObject(this.rootPath, key, metaptr)
+						: new FsObject(this.rootPath, key, stats);
 					objects.push(obj);
 				}
 			}
