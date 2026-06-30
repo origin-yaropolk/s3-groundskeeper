@@ -1,30 +1,53 @@
 {
-  "scripts": {
-    "build": "tsc --build tsconfig.json && node tools/package.js",
-    "lint": "eslint --ext .ts,.tsx src/"
-  },
-  "private": true,
-  "workspaces": [],
-  "engines": {
-    "node": ">=16.18.1"
-  },
-  "devDependencies": {
-    "@aws-sdk/types": "^3.0.0",
-    "@types/minimatch": "3.0.3",
-    "@types/node": "^16.18.80",
-    "@types/ws": "^8.5.4",
-    "@types/yargs": "^16.0.1",
-    "@typescript-eslint/eslint-plugin": "^4.8.1",
-    "@typescript-eslint/parser": "^4.8.1",
-    "eslint": "^7.14.0",
-    "typescript": "^4.0.5"
-  },
-  "dependencies": {
-    "@aws-sdk/client-s3": "^3.0.0",
-    "minimatch": "3.0.4",
-    "yargs": "^16.2.0"
-  },
-  "volta": {
-    "node": "16.18.1"
-  }
+	"name": "s3-groundskeeper",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "One way sync: local directory -> S3 bucket",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/tradingview/s3-groundskeeper"
+	},
+	"main": "dist/index.js",
+	"bin": {
+		"s3gk": "dist/cli.js"
+	},
+	"files": [
+		"dist",
+		"src",
+		"tools",
+		"tsconfig.json",
+		"LICENSE.txt",
+		"README.md"
+	],
+	"scripts": {
+		"prepare": "npm run build",
+		"build": "tsc --build tsconfig.json && node tools/package.cjs",
+		"lint": "eslint --ext .ts,.tsx src/"
+	},
+	"private": true,
+	"workspaces": [],
+	"engines": {
+		"node": ">=16.18.1"
+	},
+	"dependencies": {
+		"@aws-sdk/client-s3": "^3.0.0",
+		"minimatch": "3.0.4",
+		"yargs": "^16.2.0"
+	},
+	"devDependencies": {
+		"@aws-sdk/types": "^3.0.0",
+		"@types/minimatch": "3.0.3",
+		"@types/node": "^16.18.80",
+		"@types/ws": "^8.5.4",
+		"@types/yargs": "^16.0.1",
+		"@typescript-eslint/eslint-plugin": "^4.8.1",
+		"@typescript-eslint/parser": "^4.8.1",
+		"eslint": "^7.14.0",
+		"tsx": "^3.14.0",
+		"typescript": "^4.0.5"
+	},
+	"volta": {
+		"node": "16.18.1"
+	}
 }

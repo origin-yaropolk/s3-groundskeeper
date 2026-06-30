@@ -5,13 +5,19 @@ One way synchronization local directory content with Amazon S3 bucket.
 
 
 ## Setup, develop, build
+
 ### npm
-setup: `npm i`
+setup: `npm i`  
 start develop: `npm run build`
 
-### yarn
-setup `yarn`
-start develop: `yarn build`
+### Git dependency (pnpm / npm)
+
+The package builds on install via the `prepare` script (`tsc` → `dist/`).  
+When using a git URL, allow build scripts (pnpm: add to `onlyBuiltDependencies` in `pnpm-workspace.yaml`).
+
+```json
+"s3-groundskeeper": "github:<org>/s3-groundskeeper#<commit-or-branch>"
+```
 
 
 ## CLI
